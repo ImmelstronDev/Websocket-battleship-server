@@ -27,10 +27,10 @@
       "strictPropertyInitialization": false,
       "lib": ["esnext"]
     },
-    "ts-node": {
-      "esm": true,
-      "experimentalSpecifierResolution": "node"
-    },
+    // "ts-node": {
+    //   "esm": true,
+    //   "experimentalSpecifierResolution": "node"
+    // },
     "include": ["src/**/*.ts", "index.ts"],
     "exclude": ["node_modules", "dist"]
   }
