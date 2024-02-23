@@ -1,19 +1,11 @@
 import { COMMAND_TYPE } from "../constants/command-types";
-import { SHIP_SIZE } from "../constants/ship-size";
+import { ship } from "./ship.type";
 
 export type addShips = {
   type: COMMAND_TYPE.ADD_SHIPS;
   data: {
     gameId: number;
-    ships: {
-      position: {
-        x: number;
-        y: number;
-      };
-      direction: boolean;
-      length: number;
-      type: typeof SHIP_SIZE;
-    }[];
+    ships: ship[];
     indexPlayer: number;
   };
   id: number;
