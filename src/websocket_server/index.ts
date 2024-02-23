@@ -36,3 +36,11 @@ export class Wss {
     );
   }
 }
+
+const a = {
+  type: "finish",
+  data: {
+    winPlayer: 1 /* id of the player in the current game session */,
+  },
+  id: 0,
+};
