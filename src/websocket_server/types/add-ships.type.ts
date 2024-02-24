@@ -4,9 +4,9 @@ import { ship } from "./ship.type";
 export type addShips = {
   type: COMMAND_TYPE.ADD_SHIPS;
   data: {
-    gameId: number;
+    gameId: string;
     ships: ship[];
-    indexPlayer: number;
+    indexPlayer: string;
   };
   id: number;
 };
