@@ -1,28 +1,34 @@
-import { RawData, WebSocket } from "ws";
+import { RawData, WebSocketServer } from "ws";
+import { IWebsocketClient } from "../types/websocket-client.type";
+import { DataController } from "./data-controller";
 
 export class WebSocketController {
-  constructor() {}
-  public ws: WebSocket;
-
-  public connection(ws: WebSocket) {
-    this.ws = ws;
-
-    ws.on("error", console.error);
-
-    ws.on("message", function message(data: RawData) {
-      console.log("reserved: %s", data);
-      const requestObject = JSON.parse(JSON.stringify(data));
-      const responseObject = {
-        type: "reg",
-        data: JSON.stringify({
-          name: requestObject.name,
-          index: 1,
-          error: false,
-          errorText: "no error",
-        }),
-        id: 0,
-      };
-      ws.send(JSON.stringify(responseObject));
-    });
+  constructor(wss: WebSocketServer) {
+    this.wss = wss;
   }
+  public wss: WebSocketServer;
+  public wsClientState: IWebsocketClient;
+  public dataController: DataController;
+
+  public connection = (wsClientState: IWebsocketClient) => {
+    this.wsClientState = wsClientState;
+    this.dataController = new DataController(this.wsClientState);
+    wsClientState.on("error", console.error);
+    wsClientState.on("message", this.message);
+    wsClientState.on("close", function close() {
+      console.log("websocket connection was closed");
+    });
+  };
+
+  private message = (data: RawData): void => {
+    const requestObject = JSON.parse(data.toString());
+    console.log("reserved: %s", data);
+    const responseObject =
+      this.dataController.wsRequestDataHandler(requestObject);
+    console.log(responseObject);
+
+    if (responseObject) {
+      this.wsClientState.send(responseObject);
+    }
+  };
 }
