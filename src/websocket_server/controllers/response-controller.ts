@@ -3,6 +3,10 @@ import { COMMAND_TYPE } from "../constants/command-types";
 import { regRequest } from "../types/reg.type";
 import { validUser } from "../types/valid-user.type";
 import { IWebsocketClient } from "../types/websocket-client.type";
+import { dataUsers } from "../../db/users";
+import { createRoom } from "../types/create-room.type";
+import { room } from "../types/database-types/room.type";
+import { rooms } from "../../db/rooms";
 
 export class ResponseController {
   constructor(wsClient: IWebsocketClient) {
@@ -12,17 +16,7 @@ export class ResponseController {
 
   public registration(wsDataRequest: regRequest["data"] | validUser): string {
     if ("error" in wsDataRequest) {
-      const responseObject = {
-        type: COMMAND_TYPE.REG,
-        data: JSON.stringify({
-          name: "",
-          index: 0,
-          error: true,
-          errorText: wsDataRequest.errorText,
-        }),
-        id: 0,
-      };
-      return JSON.stringify(responseObject);
+      return JSON.stringify(this.createErrorResponseObject(wsDataRequest));
     }
 
     const { name, password } = wsDataRequest;
@@ -30,20 +24,65 @@ export class ResponseController {
     const user = {
       name: name,
       password: password,
-      id: randomUUID(),
+    };
+
+    dataUsers.push(user);
+    console.log("dataUsers: %s", JSON.stringify(dataUsers));
+
+    this.wsClientState.playerState = {
+      ...user,
+      index: randomUUID(),
+      roomId: "",
     };
 
     const responseObject = {
       type: COMMAND_TYPE.REG,
       data: JSON.stringify({
         name: user.name,
-        index: user.id,
+        index: this.wsClientState.playerState.index,
         error: false,
         errorText: "",
       }),
       id: 0,
     };
-    this.wsClientState.playerState = user;
     return JSON.stringify(responseObject);
+  }
+
+  public createRoom(wsDataRequest: createRoom["data"] | validUser) {
+    if (typeof wsDataRequest === "string") {
+      this.wsClientState.playerState.roomId = randomUUID();
+      const { name, index, roomId } = this.wsClientState.playerState;
+
+      const room: room = {
+        roomId: roomId,
+        users: [{ name: name, index: index }],
+      };
+      rooms.push(room);
+      console.log("rooms: %s", JSON.stringify(rooms));
+
+      const responseObject = {
+        type: COMMAND_TYPE.CREATE_ROOM,
+        data: JSON.stringify(rooms),
+        id: 0,
+      };
+
+      return JSON.stringify(responseObject);
+    }
+    return JSON.stringify(this.createErrorResponseObject(wsDataRequest));
+  }
+
+  public createErrorResponseObject(responseData: validUser) {
+    const responseObject = {
+      type: COMMAND_TYPE.REG,
+      data: JSON.stringify({
+        name: "",
+        index: 0,
+        error: true,
+        errorText: responseData.errorText,
+      }),
+      id: 0,
+    };
+
+    return responseObject;
   }
 }

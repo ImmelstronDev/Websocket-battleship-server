@@ -12,7 +12,7 @@ export class WebSocketController {
 
   public connection = (wsClientState: IWebsocketClient) => {
     this.wsClientState = wsClientState;
-    this.dataController = new DataController(this.wsClientState);
+    this.dataController = new DataController(this.wsClientState, this.wss);
     wsClientState.on("error", console.error);
     wsClientState.on("message", this.message);
     wsClientState.on("close", function close() {
@@ -25,7 +25,7 @@ export class WebSocketController {
     console.log("reserved: %s", data);
     const responseObject =
       this.dataController.wsRequestDataHandler(requestObject);
-    console.log(responseObject);
+    console.log("responseObj: %s", responseObject);
 
     if (responseObject) {
       this.wsClientState.send(responseObject);

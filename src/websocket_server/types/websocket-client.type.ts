@@ -4,6 +4,7 @@ export interface IWebsocketClient extends WebSocket {
   playerState: {
     name: string;
     password: string;
-    id: string;
+    index: string;
+    roomId: string;
   };
 }
