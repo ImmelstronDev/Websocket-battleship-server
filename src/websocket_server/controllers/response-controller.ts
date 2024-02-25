@@ -7,6 +7,10 @@ import { dataUsers } from "../../db/users";
 import { createRoom } from "../types/create-room.type";
 import { room } from "../types/database-types/room.type";
 import { rooms } from "../../db/rooms";
+import { addUserToRoom } from "../types/add-user-to-room.type";
+import { createGame } from "../types/create-game.type";
+import { user } from "../types/user.type";
+import { games } from "../../db/games";
 
 export class ResponseController {
   constructor(wsClient: IWebsocketClient) {
@@ -33,6 +37,7 @@ export class ResponseController {
       ...user,
       index: randomUUID(),
       roomId: "",
+      idGame: "",
     };
 
     const responseObject = {
@@ -55,13 +60,13 @@ export class ResponseController {
 
       const room: room = {
         roomId: roomId,
-        users: [{ name: name, index: index }],
+        roomUsers: [{ name: name, index: index }],
       };
       rooms.push(room);
       console.log("rooms: %s", JSON.stringify(rooms));
 
       const responseObject = {
-        type: COMMAND_TYPE.CREATE_ROOM,
+        type: COMMAND_TYPE.UPDATE_ROOM,
         data: JSON.stringify(rooms),
         id: 0,
       };
@@ -69,6 +74,49 @@ export class ResponseController {
       return JSON.stringify(responseObject);
     }
     return JSON.stringify(this.createErrorResponseObject(wsDataRequest));
+  }
+
+  public createGame(wsDataRequest: addUserToRoom["data"]) {
+    const idGame = randomUUID();
+    const { indexRoom: roomId } = wsDataRequest;
+    const { index, name } = this.wsClientState.playerState;
+
+    const game: createGame["data"] = {
+      idGame: idGame,
+      idPlayer: index,
+    };
+
+    const responseObject = {
+      type: COMMAND_TYPE.CREATE_GAME,
+      data: JSON.stringify(game),
+      id: 0,
+    };
+
+    if (this.wsClientState.playerState.roomId === roomId) {
+      return "";
+    }
+
+    this.wsClientState.playerState.roomId = roomId;
+    this.wsClientState.playerState.idGame = idGame;
+
+    const indexRoom = rooms.findIndex((room) => {
+      room.roomId === roomId;
+    });
+    rooms[indexRoom]?.roomUsers.push({ index, name });
+    const usersGame = rooms[indexRoom]?.roomUsers as user[];
+    games.push({ stage: "preparing", idGame: idGame, users: usersGame });
+    rooms.splice(indexRoom, 1);
+
+    return JSON.stringify(responseObject);
+  }
+
+  public createUpdateRoom() {
+    const responseObject = {
+      type: COMMAND_TYPE.UPDATE_ROOM,
+      data: JSON.stringify(rooms),
+      id: 0,
+    };
+    return JSON.stringify(responseObject);
   }
 
   public createErrorResponseObject(responseData: validUser) {

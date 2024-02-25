@@ -1,7 +1,7 @@
 import { user } from "../user.type";
 
 export type game = {
-  gameId: string;
+  idGame: string;
   stage: string;
   users: user[];
 };
