@@ -11,6 +11,8 @@ import { addUserToRoom } from "../types/add-user-to-room.type";
 import { createGame } from "../types/create-game.type";
 import { user } from "../types/user.type";
 import { games } from "../../db/games";
+import { addShips } from "../types/add-ships.type";
+import { game } from "../types/database-types/game.type";
 
 export class ResponseController {
   constructor(wsClient: IWebsocketClient) {
@@ -38,6 +40,9 @@ export class ResponseController {
       index: randomUUID(),
       roomId: "",
       idGame: "",
+      ships: [],
+      currentPlayer: "",
+      startPosition: "",
     };
 
     const responseObject = {
@@ -132,5 +137,57 @@ export class ResponseController {
     };
 
     return responseObject;
+  }
+
+  public addShips(wsDataRequest: addShips["data"]) {
+    const { gameId, indexPlayer, ships } = wsDataRequest;
+    const { index, idGame } = this.wsClientState.playerState;
+    const indexGame = games.findIndex((game) => {
+      game.idGame === gameId;
+    });
+
+    console.log("Index player: %s", indexPlayer);
+    console.log("Index : %s", index);
+
+    if (idGame === gameId) {
+      this.wsClientState.playerState.ships = ships;
+      this.wsClientState.playerState.currentPlayer = indexPlayer;
+
+      console.log("Games: %s:", JSON.stringify(games));
+      const isReady = games[indexGame]?.stage === "ready";
+
+      if (isReady) {
+        const responseObject = {
+          type: COMMAND_TYPE.START_GAME,
+          data: JSON.stringify({ ships, currentPlayerIndex: index }),
+          id: 0,
+        };
+        this.wsClientState.playerState.startPosition =
+          JSON.stringify(responseObject);
+        return JSON.stringify(responseObject);
+      }
+
+      if (games[indexGame]) {
+        (games[indexGame] as game).stage = "ready";
+        const responseObject = {
+          type: COMMAND_TYPE.START_GAME,
+          data: JSON.stringify({ ships, currentPlayerIndex: index }),
+          id: 0,
+        };
+        this.wsClientState.playerState.startPosition =
+          JSON.stringify(responseObject);
+        return "don't ready";
+      }
+    }
+    return "";
+  }
+
+  public updatePlayer(player: string) {
+    const responseObject = {
+      type: COMMAND_TYPE.TURN,
+      data: JSON.stringify({ currentPlayer: player }),
+      id: 0,
+    };
+    return JSON.stringify(responseObject);
   }
 }

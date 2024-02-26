@@ -8,6 +8,7 @@ import { IWebsocketClient } from "../types/websocket-client.type";
 import { ResponseController } from "./response-controller";
 import { createRoom } from "../types/create-room.type";
 import { addUserToRoom } from "../types/add-user-to-room.type";
+import { addShips } from "../types/add-ships.type";
 
 export class DataController {
   constructor(wsClient: IWebsocketClient, wss: WebSocketServer) {
@@ -43,6 +44,19 @@ export class DataController {
       requestData &&
       typeof requestData === "object" &&
       "indexRoom" in requestData
+    ) {
+      return requestData as T;
+    }
+
+    if (
+      requestData &&
+      typeof requestData === "object" &&
+      "indexPlayer" in requestData &&
+      typeof requestData.indexPlayer === "string" &&
+      "gameId" in requestData &&
+      typeof requestData.gameId === "string" &&
+      "ships" in requestData &&
+      Array.isArray(requestData.ships)
     ) {
       return requestData as T;
     }
@@ -120,6 +134,49 @@ export class DataController {
             client.send(game);
           } else if (client.readyState === WebSocket.OPEN) {
             client.send(rooms);
+          }
+        }
+        return;
+      }
+      case COMMAND_TYPE.ADD_SHIPS: {
+        const wsData =
+          typeof requestData.data === "string"
+            ? JSON.parse(requestData.data)
+            : requestData.data;
+
+        const isValidData = this.isValid<addShips["data"]>(wsData);
+        if ("error" in isValidData) {
+          return JSON.stringify({
+            ...this.responseController.createErrorResponseObject(isValidData),
+            type: COMMAND_TYPE.ADD_SHIPS,
+          });
+        }
+        const ships = this.responseController.addShips(isValidData);
+        console.log("SHIPS: %s", JSON.stringify(isValidData));
+        if (!ships) {
+          return JSON.stringify({
+            type: COMMAND_TYPE.ADD_SHIPS,
+            error: true,
+            errorText: "invalid ships data",
+          });
+        }
+        if (ships === "don't ready") {
+          return;
+        } else if (ships) {
+          const clients = this.wss.clients as Set<IWebsocketClient>;
+
+          for (const client of clients) {
+            if (
+              client.readyState === WebSocket.OPEN &&
+              client.playerState.idGame ===
+                this.wsClientState.playerState.idGame
+            ) {
+              client.send(client.playerState.startPosition);
+              const player = client.playerState.currentPlayer;
+              const playerResponse =
+                this.responseController.updatePlayer(player);
+              client.send(playerResponse);
+            }
           }
         }
         return;

@@ -5,7 +5,7 @@ export type startGame = {
   type: typeof COMMAND_TYPE.START_GAME;
   data: {
     ships: ship[];
-    currentPlayerIndex: number;
+    currentPlayerIndex: string;
   };
   id: number;
 };
