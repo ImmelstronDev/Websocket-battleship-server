@@ -10,6 +10,7 @@ export interface IWebsocketClient extends WebSocket {
     idGame: string;
     ships: ship[];
     startPosition: string;
-    currentPlayer: string;
+    // currentPlayer: string;
+    shipPlacement: number[][];
   };
 }

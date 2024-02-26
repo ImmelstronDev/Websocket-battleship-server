@@ -70,31 +70,34 @@ export class DataController {
           typeof requestData.data === "string"
             ? JSON.parse(requestData.data)
             : requestData.data;
-        const clients = this.wss.clients as Set<IWebsocketClient>;
 
-        const rooms = this.responseController.createUpdateRoom();
-        for (const client of clients) {
-          client.send(rooms);
-        }
-        return this.responseController.registration(
+        const responseObject = this.responseController.registration(
           this.isValid<regRequest["data"]>(wsData)
         );
+        this.wsClientState.send(responseObject);
+        const rooms = this.responseController.createUpdateRoom();
+        this.wsClientState.send(rooms);
+
+        return;
       }
       case COMMAND_TYPE.CREATE_ROOM: {
         const wsData = requestData.data;
         const clients = this.wss.clients as Set<IWebsocketClient>;
         const validData = this.isValid<createRoom["data"]>(wsData);
 
-        if (typeof validData !== "string") {
+        const isError = this.responseController.createRoom(validData);
+        if (isError) {
           return JSON.stringify({
+            ...isError,
             type: COMMAND_TYPE.CREATE_ROOM,
-            ...validData,
           });
         }
 
-        const rooms = this.responseController.createRoom(validData);
         for (const client of clients) {
-          if (client.readyState === WebSocket.OPEN) client.send(rooms);
+          if (client.readyState === WebSocket.OPEN && client.playerState) {
+            const rooms = this.responseController.createUpdateRoom();
+            client.send(rooms);
+          }
         }
         return;
       }
@@ -112,9 +115,9 @@ export class DataController {
           });
         }
 
-        const game = this.responseController.createGame(isValidData);
+        const isGame = this.responseController.createGame(isValidData);
 
-        if (!game) {
+        if (!isGame) {
           return JSON.stringify({
             ...this.responseController.createErrorResponseObject,
             type: COMMAND_TYPE.ADD_USER_TO_ROOM,
@@ -127,11 +130,16 @@ export class DataController {
         for (const client of clients) {
           if (
             client.readyState === WebSocket.OPEN &&
-            client.playerState.roomId === this.wsClientState.playerState.roomId
+            client.playerState.roomId ===
+              this.wsClientState.playerState.roomId &&
+            client.playerState
           ) {
             client.playerState.idGame = this.wsClientState.playerState.idGame;
+            const responseObject =
+              this.responseController.createGameResponseObject(client);
+
             client.send(rooms);
-            client.send(game);
+            client.send(responseObject);
           } else if (client.readyState === WebSocket.OPEN) {
             client.send(rooms);
           }
@@ -172,9 +180,9 @@ export class DataController {
                 this.wsClientState.playerState.idGame
             ) {
               client.send(client.playerState.startPosition);
-              const player = client.playerState.currentPlayer;
+              const gameId = client.playerState.idGame;
               const playerResponse =
-                this.responseController.updatePlayer(player);
+                this.responseController.updatePlayer(gameId);
               client.send(playerResponse);
             }
           }

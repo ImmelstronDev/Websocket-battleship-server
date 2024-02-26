@@ -4,15 +4,12 @@ import { regRequest } from "../types/reg.type";
 import { validUser } from "../types/valid-user.type";
 import { IWebsocketClient } from "../types/websocket-client.type";
 import { dataUsers } from "../../db/users";
-import { createRoom } from "../types/create-room.type";
 import { room } from "../types/database-types/room.type";
 import { rooms } from "../../db/rooms";
 import { addUserToRoom } from "../types/add-user-to-room.type";
-import { createGame } from "../types/create-game.type";
 import { user } from "../types/user.type";
 import { games } from "../../db/games";
 import { addShips } from "../types/add-ships.type";
-import { game } from "../types/database-types/game.type";
 
 export class ResponseController {
   constructor(wsClient: IWebsocketClient) {
@@ -41,8 +38,8 @@ export class ResponseController {
       roomId: "",
       idGame: "",
       ships: [],
-      currentPlayer: "",
       startPosition: "",
+      shipPlacement: [],
     };
 
     const responseObject = {
@@ -58,61 +55,66 @@ export class ResponseController {
     return JSON.stringify(responseObject);
   }
 
-  public createRoom(wsDataRequest: createRoom["data"] | validUser) {
+  public createRoom(wsDataRequest: string | validUser) {
     if (typeof wsDataRequest === "string") {
       this.wsClientState.playerState.roomId = randomUUID();
       const { name, index, roomId } = this.wsClientState.playerState;
 
       const room: room = {
         roomId: roomId,
-        roomUsers: [{ name: name, index: index }],
+        roomUsers: [{ name: name, index: index, shipsPlacement: [] }],
       };
+
+      const isRoom = rooms.find(
+        (room) =>
+          room.roomUsers.find((user) => user.index === index)?.index === index
+      );
+      if (isRoom) {
+        return this.createErrorResponseObject;
+      }
       rooms.push(room);
       console.log("rooms: %s", JSON.stringify(rooms));
 
-      const responseObject = {
-        type: COMMAND_TYPE.UPDATE_ROOM,
-        data: JSON.stringify(rooms),
-        id: 0,
-      };
-
-      return JSON.stringify(responseObject);
+      return;
     }
-    return JSON.stringify(this.createErrorResponseObject(wsDataRequest));
+    return this.createErrorResponseObject(wsDataRequest);
   }
 
-  public createGame(wsDataRequest: addUserToRoom["data"]) {
+  public createGame(wsDataRequest: addUserToRoom["data"]): boolean | string {
     const idGame = randomUUID();
     const { indexRoom: roomId } = wsDataRequest;
     const { index, name } = this.wsClientState.playerState;
 
-    const game: createGame["data"] = {
-      idGame: idGame,
-      idPlayer: index,
-    };
-
-    const responseObject = {
-      type: COMMAND_TYPE.CREATE_GAME,
-      data: JSON.stringify(game),
-      id: 0,
-    };
-
     if (this.wsClientState.playerState.roomId === roomId) {
-      return "";
+      return false;
     }
 
     this.wsClientState.playerState.roomId = roomId;
     this.wsClientState.playerState.idGame = idGame;
 
-    const indexRoom = rooms.findIndex((room) => {
-      room.roomId === roomId;
-    });
-    rooms[indexRoom]?.roomUsers.push({ index, name });
-    const usersGame = rooms[indexRoom]?.roomUsers as user[];
-    games.push({ stage: "preparing", idGame: idGame, users: usersGame });
-    rooms.splice(indexRoom, 1);
+    const room = rooms.find((room) => room.roomId === roomId);
 
-    return JSON.stringify(responseObject);
+    room?.roomUsers.push({ index, name, shipsPlacement: [] });
+    const usersGame = [...(room?.roomUsers as user[])];
+    games.push({
+      stage: "prepare",
+      idGame: idGame,
+      users: usersGame,
+      currentPlayer: "",
+    });
+    for (const user of usersGame) {
+      rooms.splice(
+        rooms.findIndex(
+          (room) =>
+            room.roomUsers.find(
+              (userOutRoom) => userOutRoom.index === user.index
+            )?.index === user.index
+        ),
+        1
+      );
+    }
+
+    return true;
   }
 
   public createUpdateRoom() {
@@ -142,50 +144,67 @@ export class ResponseController {
   public addShips(wsDataRequest: addShips["data"]) {
     const { gameId, indexPlayer, ships } = wsDataRequest;
     const { index, idGame } = this.wsClientState.playerState;
-    const indexGame = games.findIndex((game) => {
-      game.idGame === gameId;
-    });
 
+    const game = games.find((game) => game.idGame === gameId);
     console.log("Index player: %s", indexPlayer);
     console.log("Index : %s", index);
 
-    if (idGame === gameId) {
+    if (idGame === gameId && game) {
       this.wsClientState.playerState.ships = ships;
-      this.wsClientState.playerState.currentPlayer = indexPlayer;
 
-      console.log("Games: %s:", JSON.stringify(games));
-      const isReady = games[indexGame]?.stage === "ready";
+      console.log("Game: %s:", JSON.stringify(game));
+      const players = game.users;
+      const player = players.find((player) => player.index === indexPlayer);
+      if (player) {
+        player.shipsPlacement = ships;
+      }
+      console.log("Game.stage: %s:", JSON.stringify(game.stage));
+
+      const isReady = game.stage === "ready";
 
       if (isReady) {
         const responseObject = {
           type: COMMAND_TYPE.START_GAME,
-          data: JSON.stringify({ ships, currentPlayerIndex: index }),
+          data: JSON.stringify({ ships, currentPlayerIndex: indexPlayer }),
           id: 0,
         };
         this.wsClientState.playerState.startPosition =
           JSON.stringify(responseObject);
+        game.stage = "start";
         return JSON.stringify(responseObject);
       }
 
-      if (games[indexGame]) {
-        (games[indexGame] as game).stage = "ready";
-        const responseObject = {
-          type: COMMAND_TYPE.START_GAME,
-          data: JSON.stringify({ ships, currentPlayerIndex: index }),
-          id: 0,
-        };
-        this.wsClientState.playerState.startPosition =
-          JSON.stringify(responseObject);
-        return "don't ready";
-      }
+      game.stage = "ready";
+      game.currentPlayer = index;
+      const responseObject = {
+        type: COMMAND_TYPE.START_GAME,
+        data: JSON.stringify({ ships, currentPlayerIndex: indexPlayer }),
+        id: 0,
+      };
+      this.wsClientState.playerState.startPosition =
+        JSON.stringify(responseObject);
+      return "don't ready";
     }
     return "";
   }
 
-  public updatePlayer(player: string) {
+  public updatePlayer(gameId: string) {
+    const game = games.find((game) => game.idGame === gameId);
+    const player = game && game.currentPlayer;
     const responseObject = {
       type: COMMAND_TYPE.TURN,
       data: JSON.stringify({ currentPlayer: player }),
+      id: 0,
+    };
+    return JSON.stringify(responseObject);
+  }
+
+  public createGameResponseObject(client: IWebsocketClient) {
+    const { idGame, index } = client.playerState;
+
+    const responseObject = {
+      type: COMMAND_TYPE.CREATE_GAME,
+      data: JSON.stringify({ idGame: idGame, idPlayer: index }),
       id: 0,
     };
     return JSON.stringify(responseObject);

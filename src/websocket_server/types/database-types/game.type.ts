@@ -4,4 +4,5 @@ export type game = {
   idGame: string;
   stage: string;
   users: user[];
+  currentPlayer: string;
 };
