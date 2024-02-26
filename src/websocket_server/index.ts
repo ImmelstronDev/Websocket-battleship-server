@@ -12,5 +12,8 @@ export class Wss {
 
   private connection() {
     this.wss.on("connection", this.wsController.connection);
+    this.wss.on("close", function close() {
+      console.log("disconnected");
+    });
   }
 }
